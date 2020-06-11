@@ -1,0 +1,5 @@
+library(tidyverse)
+library(lubridate)
+library(dslabs)
+movielens <- data("movielens")
+save(movielens,file="rda/movielens.rda")
