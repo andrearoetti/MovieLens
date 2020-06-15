@@ -8,6 +8,17 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+## Introduction
+
+The MovieLens project goal is to build up a prediction system for movies ratings based on a historical series of records. The dataset we will use as base to create our model is called **edx**, while the dataset where we will measure the efficiency of our model, as if we did not know the given ratings, is the called **validation**.
+We therefore first read these two datasets that we have previously already dowloaded.
+
+```{r datasets reading}
+movielens <- load("C:/Users/PAOLA/projects/movielens/rda/movielens.rda")
+movielens[1,]
+```
+
+
 
 ## R Markdown
 
