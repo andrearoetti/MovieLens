@@ -10,32 +10,18 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 ## Introduction
 
-The MovieLens project goal is to build up a prediction system for movies ratings based on a historical series of records. The dataset we will use as base to create our model is called **edx**, while the dataset where we will measure the efficiency of our model, as if we did not know the given ratings, is the called **validation**.
-We therefore first read these two datasets that we have previously already dowloaded.
+The MovieLens project goal is to build up a prediction system for movies ratings based on a historical series of records. The dataset we will use as base to create our model is called **edx**, while the dataset where we will measure the efficiency of our model, as if we did not know the given ratings, is called **validation**.
+In order to get started, we first load some libraries that will be useful for the analysis.
+
+```{r libraries, message=FALSE}
+library(tidyverse)
+```
+
+We therefore read the two datasets that we have previously already dowloaded as .rds files and saved locally for reasons of size: a file bigger than 100MB is not possible to push to Github, therefore not possible to be kept in the project folders syncronised with it. We know that using complete path rather than relative path is not recommended, in fact below we also provide, as comment the path to the datasets as they were in the "data" folder within our working directory.
 
 ```{r datasets reading}
-movielens <- load("C:/Users/PAOLA/projects/movielens/rda/movielens.rda")
-movielens[1,]
+edx <- readRDS("C:/Users/roetti/Documents/MovieLens/edx.rds")
+# edx <- readRDS("data/edx.rds")
+validation <- readRDS("C:/Users/roetti/Documents/MovieLens/validation.rds")
+# edx <- readRDS("data/validation.rds")
 ```
-
-
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
