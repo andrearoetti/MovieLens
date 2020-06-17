@@ -21,6 +21,7 @@ In order to get started, we first load some libraries that will be useful for th
 library(tidyverse)
 library(lattice)
 library(caret)
+library(lubridate)
 ```
 
 We therefore read the two datasets that we have previously already dowloaded as .rds files and saved locally for reasons of size: a file bigger than 100MB is not possible to push to Github, therefore not possible to be kept in the project folders syncronised with it. We know that using complete path rather than relative path is not recommended, in fact below we also provide, as comment the path to the datasets as they were in the "data" folder within our working directory.
@@ -82,7 +83,11 @@ rmse_results <- tibble(method = "Just the average", RMSE = first_rmse)
 rmse_results %>% knitr::kable()
 ```
 
-The result, almost 1.06 is quite high. To improve the result, we first think that different movies have different average ratings. We call this a bias, namely a factor, the movie ID, that impacts our predicted rating. To check our guess, we subtract the average rating from the movie average, so that our b_i, bias factors due to the movie ID, are positive only if the movie has an average rating above the overall average mu, negative if below. Then we plot an histogram.
+The result, almost 1.06 is quite high.
+
+## Movie Effect
+
+To improve the result, we first think that different movies have different average ratings. We call this a bias, namely a factor, the movie ID, that impacts our predicted rating. To check our guess, we subtract the average rating from the movie average, so that our b_i, bias factors due to the movie ID, are positive only if the movie has an average rating above the overall average mu, negative if below. Then we plot an histogram.
 
 ```{r b_i, message=FALSE, warning = FALSE}
 b_i <- train_set %>%
@@ -99,12 +104,16 @@ second_pred <- test_set %>%
      mutate(pred = mu + b_i) %>% .$pred
 second_rmse <- RMSE(test_set$rating, second_pred)
 rmse_results <- bind_rows(rmse_results,
-                          tibble(method="Movie Effect Model",  
+                          tibble(method = "Movie Effect Model",  
                                      RMSE = second_rmse))
 rmse_results %>% knitr::kable()
 ```
 
-The result has quite improved. However, we suspect that a possible bias could come also from the userId, since different users reasonably give different average ratings. We try to verify this by plotting an histogram of the average ratings for users that have rated at least 100 movies.
+The result has quite improved. 
+
+## User Effect
+
+We suspect that a possible bias could come also from the userId, since different users reasonably give different average ratings. We try to verify this by plotting an histogram of the average ratings for users that have rated at least 100 movies.
 
 ```{r b_u, message=FALSE, warning = FALSE}
 train_set %>% 
@@ -119,20 +128,105 @@ The plot confirms our suspect, therefore we include the bias factors b_u linked 
 
 ```{r third RMSE, message=FALSE, warning = FALSE}
 b_u <- train_set %>% 
-     left_join(b_i, by="movieId") %>%
+     left_join(b_i, by = "movieId") %>%
      group_by(userId) %>%
      summarize(b_u = sum(rating - b_i - mu)/(n()))
 third_pred <- test_set %>% 
-     left_join(b_i, by='movieId') %>%
-     left_join(b_u, by='userId') %>%
+     left_join(b_i, by = "movieId") %>%
+     left_join(b_u, by = "userId") %>%
      mutate(pred = mu + b_i + b_u) %>% .$pred
 third_rmse <- RMSE(test_set$rating, third_pred)
 rmse_results <- bind_rows(rmse_results,
-                          tibble(method="Movie + User Effects Model",  
+                          tibble(method = "Movie + User Effects Model",  
                                      RMSE = third_rmse))
 rmse_results %>% knitr::kable()
 ```
 
+Section 6 of the Machine Learning course continues by mastering the model obtained so far by using a regularization process. Before doing this, we first try to find out other possible biases that can increase even more the accuracy of our predictions.
+
+# Analysis (part 2)
+
+## Genres Effect
+
+We think that the genres also may represent a bias, since some genres could, on average, be more appreciated than others. We therefore make a plot, to understand if this is true, with the below code.
+
+```{r b_g, message=FALSE, warning = FALSE}
+train_set %>% group_by(genres) %>%
+  summarize(n = n(), avg = mean(rating), se = sd(rating)/sqrt(n())) %>%
+  filter(n >= 1000) %>% 
+  mutate(genres = reorder(genres, avg)) %>%
+  ggplot(aes(x = genres, y = avg, ymin = avg - 2*se, ymax = avg + 2*se)) + 
+  geom_point() +
+  geom_errorbar() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Actually it looks like also the genres have an impact on the rating: we include the bias b_g, calculated on the train set, and then applied on the test set to verify the improvements, if any. We also keep on updating our table of results with the new rmse, the fourth one.
+
+```{r fourth RMSE, message=FALSE, warning = FALSE}
+b_g <- train_set %>% 
+    left_join(b_i, by = "movieId") %>% 
+    left_join(b_u, by = "userId") %>% 
+    group_by(genres) %>% 
+    summarise(b_g = sum(rating - b_i - b_u - mu)/(n()))
+fourth_pred <- test_set %>% 
+     left_join(b_i, by = "movieId") %>%
+     left_join(b_u, by = "userId") %>%
+     left_join(b_g, by = "genres") %>%
+     mutate(pred = mu + b_i + b_u + b_g) %>% .$pred
+fourth_rmse <- RMSE(test_set$rating, fourth_pred)
+rmse_results <- bind_rows(rmse_results,
+                          tibble(method = "Movie + User + Genres Effects Model",  
+                                     RMSE = fourth_rmse))
+rmse_results %>% knitr::kable()
+```
+
+The result has slightly but furthre improved.
+
+## Time Effect
+
+Trying to exploit somehow the timestamp column in the edx dataset, we try to check whether a time effect exists or not. The code for the plot is the following: we translate the timestamp into date and then we round the dates by week.
+
+```{r b_d, message=FALSE, warning = FALSE}
+train_set %>% mutate(date = round_date(as_datetime(timestamp), unit = "week")) %>%
+	group_by(date) %>%
+	summarize(rating = mean(rating)) %>%
+	ggplot(aes(date, rating)) +
+	geom_point() +
+	geom_smooth()
+```
+
+We can notice that there is a light but perceivable time effect: we will call this bias b_d, since it's due to the date a rating is given, adn will include in our prediction model. As done before, we calculate the factors b_d on the training set, we apply the model to the test set and report the rmse obtained, the fifth one, in the table.
+
+```{r fifth RMSE, message=FALSE, warning = FALSE}
+b_d <- train_set %>% 
+    mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+    left_join(b_i,by="movieId") %>% 
+    left_join(b_u,by="userId") %>% 
+    left_join(b_g,by="genres") %>%
+    group_by(date) %>% 
+    summarise(b_d=sum(rating - b_i - b_u - b_g - mu)/(n()))
+fifth_pred <- test_set %>%
+    mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+    left_join(b_i, by = "movieId") %>%
+    left_join(b_u, by = "userId") %>%
+    left_join(b_g, by = "genres") %>%
+    left_join(b_d, by = "date") %>%
+    mutate(pred = mu + b_i + b_u + b_g + b_d) %>% .$pred
+fifth_rmse <- RMSE(test_set$rating, fifth_pred)
+rmse_results <- bind_rows(rmse_results,
+                          tibble(method = "Movie + User + Genres +Time Effects Model",  
+                                     RMSE = fifth_rmse))
+rmse_results %>% knitr::kable()
+```
+
+## Regularization
+
+
+
+# Results
+
+# Conclusion
 
 
 

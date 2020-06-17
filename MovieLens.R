@@ -75,3 +75,47 @@ train_set %>% group_by(genres) %>%
   geom_point() +
   geom_errorbar() + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+b_g <- train_set %>% 
+  left_join(b_i, by = "movieId") %>% 
+  left_join(b_u, by = "userId") %>% 
+  group_by(genres) %>% 
+  summarise(b_g = sum(rating - b_i - b_u - mu)/(n()))
+fourth_pred <- test_set %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  left_join(b_g, by = "genres") %>%
+  mutate(pred = mu + b_i + b_u + b_g) %>% .$pred
+fourth_rmse <- RMSE(test_set$rating, fourth_pred)
+rmse_results <- bind_rows(rmse_results,
+                          tibble(method = "Movie + User + Genres Effects Model",  
+                                 RMSE = fourth_rmse))
+rmse_results %>% knitr::kable()
+
+train_set %>% mutate(date = round_date(as_datetime(timestamp), unit = "week")) %>%
+  group_by(date) %>%
+  summarize(rating = mean(rating)) %>%
+  ggplot(aes(date, rating)) +
+  geom_point() +
+  geom_smooth()
+
+b_d <- train_set %>% 
+  mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+  left_join(b_i,by="movieId") %>% 
+  left_join(b_u,by="userId") %>% 
+  left_join(b_g,by="genres") %>%
+  group_by(date) %>% 
+  summarise(b_d=sum(rating - b_i - b_u - b_g - mu)/(n()))
+fifth_pred <- test_set %>%
+  mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  left_join(b_g, by = "genres") %>%
+  left_join(b_d, by = "date") %>%
+  mutate(pred = mu + b_i + b_u + b_g + b_d) %>% .$pred
+fifth_rmse <- RMSE(test_set$rating, fifth_pred)
+rmse_results <- bind_rows(rmse_results,
+                          tibble(method = "Movie + User + Genres +Time Effects Model",  
+                                 RMSE = fifth_rmse))
+rmse_results %>% knitr::kable()
+
