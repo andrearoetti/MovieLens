@@ -120,3 +120,75 @@ rmse_results <- bind_rows(rmse_results,
                                  RMSE = fifth_rmse))
 rmse_results %>% knitr::kable()
 
+lambdas <- seq(0, 10, 0.25)
+rmses <- sapply(lambdas, function(l){
+  mu <- mean(train_set$rating)
+  b_i <- train_set %>%
+    group_by(movieId) %>%
+    summarize(b_i = sum(rating - mu)/(n()+l))
+  b_u <- train_set %>% 
+    left_join(b_i, by = "movieId") %>%
+    group_by(userId) %>%
+    summarize(b_u = sum(rating - b_i - mu)/(n()+l))
+  b_g <- train_set %>% 
+    left_join(b_i, by = "movieId") %>% 
+    left_join(b_u, by = "userId") %>% 
+    group_by(genres) %>% 
+    summarise(b_g = sum(rating - b_i - b_u - mu)/(n()+l))
+  b_d <- train_set %>% 
+    mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+    left_join(b_i,by="movieId") %>% 
+    left_join(b_u,by="userId") %>% 
+    left_join(b_g,by="genres") %>%
+    group_by(date) %>% 
+    summarise(b_d=sum(rating - b_i - b_u - b_g - mu)/(n()+l))
+  pred <- test_set %>%
+    mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+    left_join(b_i, by = "movieId") %>%
+    left_join(b_u, by = "userId") %>%
+    left_join(b_g, by = "genres") %>%
+    left_join(b_d, by = "date") %>%
+    mutate(pred = mu + b_i + b_u + b_g + b_d) %>% .$pred
+  return(RMSE(test_set$rating, pred))})
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Regularized Movie + User + Genres +Time Effects Model",  
+                                     RMSE = min(rmses)))
+rmse_results %>% knitr::kable()
+
+qplot(lambdas, rmses)  
+lambda <- lambdas[which.min(rmses)]
+lambda
+
+mu <- mean(edx$rating)
+b_i <- edx %>%
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda))
+b_u <- edx %>% 
+  left_join(b_i, by = "movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda))
+b_g <- edx %>% 
+  left_join(b_i, by = "movieId") %>% 
+  left_join(b_u, by = "userId") %>% 
+  group_by(genres) %>% 
+  summarise(b_g = sum(rating - b_i - b_u - mu)/(n()+lambda))
+b_d <- edx %>% 
+  mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+  left_join(b_i,by="movieId") %>% 
+  left_join(b_u,by="userId") %>% 
+  left_join(b_g,by="genres") %>%
+  group_by(date) %>% 
+  summarise(b_d=sum(rating - b_i - b_u - b_g - mu)/(n()+lambda))
+
+predicted_ratings <- validation %>%
+  mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  left_join(b_g, by = "genres") %>%
+  left_join(b_d, by = "date") %>%
+  mutate(pred = mu + b_i + b_u + b_g + b_d) %>%
+  .$pred %>% replace_na(mu)
+RMSE(validation$rating, predicted_ratings)
+
+
+

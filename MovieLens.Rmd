@@ -222,12 +222,97 @@ rmse_results %>% knitr::kable()
 
 ## Regularization
 
-The result slighlty improved but we can perhaps do better using the regularization.
+The result slighlty improved but we can perhaps do better using regularization. We therefore define a sequence of lambdas from 0 to 10, we train our model on each lambda using the train set, we check the effectivness of each lambda on the test set calculating the rmses and we then use the best performing one, updating the RMSEs table. The following code, if run, may take several minutes.
 
+```{r lambdas model}
+lambdas <- seq(0, 10, 0.25)
+rmses <- sapply(lambdas, function(l){
+    mu <- mean(train_set$rating)
+    b_i <- train_set %>%
+        group_by(movieId) %>%
+        summarize(b_i = sum(rating - mu)/(n()+l))
+    b_u <- train_set %>% 
+        left_join(b_i, by = "movieId") %>%
+        group_by(userId) %>%
+        summarize(b_u = sum(rating - b_i - mu)/(n()+l))
+    b_g <- train_set %>% 
+        left_join(b_i, by = "movieId") %>% 
+        left_join(b_u, by = "userId") %>% 
+        group_by(genres) %>% 
+        summarise(b_g = sum(rating - b_i - b_u - mu)/(n()+l))
+    b_d <- train_set %>% 
+        mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+        left_join(b_i,by="movieId") %>% 
+        left_join(b_u,by="userId") %>% 
+        left_join(b_g,by="genres") %>%
+        group_by(date) %>% 
+        summarise(b_d=sum(rating - b_i - b_u - b_g - mu)/(n()+l))
+    pred <- test_set %>%
+        mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+        left_join(b_i, by = "movieId") %>%
+        left_join(b_u, by = "userId") %>%
+        left_join(b_g, by = "genres") %>%
+        left_join(b_d, by = "date") %>%
+        mutate(pred = mu + b_i + b_u + b_g + b_d) %>% .$pred
+    return(RMSE(test_set$rating, pred))})
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Regularized Movie + User + Genres +Time Effects Model",  
+                                     RMSE = min(rmses)))
+rmse_results %>% knitr::kable()
+```
+
+The result is pretty satisfying. Here below we can see a plot of lambdas' performances, we then select the best one and we show it.
+
+```{r lambdas plot}
+qplot(lambdas, rmses)  
+lambda <- lambdas[which.min(rmses)]
+lambda
+```
 
 # Results
 
+Once established that our model is complete, we are now training it on the whole edx dataset before testing it on the validation set. This way, we use the 100% of dataset at our disposition instead of only the 80% represented by the train set, hoping to further improve the performance.
+
+```{r last training}
+mu <- mean(edx$rating)
+b_i <- edx %>%
+    group_by(movieId) %>%
+    summarize(b_i = sum(rating - mu)/(n()+lambda))
+b_u <- edx %>% 
+    left_join(b_i, by = "movieId") %>%
+    group_by(userId) %>%
+    summarize(b_u = sum(rating - b_i - mu)/(n()+lambda))
+b_g <- edx %>% 
+    left_join(b_i, by = "movieId") %>% 
+    left_join(b_u, by = "userId") %>% 
+    group_by(genres) %>% 
+    summarise(b_g = sum(rating - b_i - b_u - mu)/(n()+lambda))
+b_d <- edx %>% 
+    mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+    left_join(b_i,by="movieId") %>% 
+    left_join(b_u,by="userId") %>% 
+    left_join(b_g,by="genres") %>%
+    group_by(date) %>% 
+    summarise(b_d=sum(rating - b_i - b_u - b_g - mu)/(n()+lambda))
+```
+
+We are now ready to finally test our model on the validation test: we make our prediction and we compute the RMSE. In order to do this, we are going to replace the NAs in our prediction (coming, for instance, because of new movies or new users) with the average rating.
+
+```{r validation}
+predicted_ratings <- validation %>%
+mutate(date=round_date(as_datetime(timestamp), unit = "week")) %>%
+left_join(b_i, by = "movieId") %>%
+left_join(b_u, by = "userId") %>%
+left_join(b_g, by = "genres") %>%
+left_join(b_d, by = "date") %>%
+mutate(pred = mu + b_i + b_u + b_g + b_d) %>%
+  .$pred %>% replace_na(mu)
+RMSE(validation$rating, predicted_ratings)
+```
+
+The final RMSE is quite good and even better than the last one obtained on our test set taken as a subset of edx: apparently this confirms that the higher number of records used to train the model has permitted a better performance.
+
 # Conclusion
 
-
+In our strategy, in building the model, we have only used the intuition in order to find out possible biases in the rating system and apply them to our predictions. There is certainly room for further improvements, for example using the principal components analysis (or PCA), that is able to find out factors not always related to intitive biases. To do this, we would first transform the dataset into a matrix where entrances are represented by userID and movieId. Since this matrix would be very huge and sparse (namely with a lot of NAs), we would filter only users and movies with a minimum number of ratings to make it manageable and light enough to not make R crash.
 
