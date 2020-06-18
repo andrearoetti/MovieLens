@@ -222,6 +222,7 @@ rmse_results %>% knitr::kable()
 
 ## Regularization
 
+The result slighlty improved but we can perhaps do better using the regularization.
 
 
 # Results

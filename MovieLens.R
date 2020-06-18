@@ -1,6 +1,7 @@
 library(tidyverse)
 library(lattice)
 library(caret)
+library(lubridate)
 
 edx <- readRDS("C:/Users/roetti/Documents/MovieLens/edx.rds")
 # edx <- readRDS("data/edx.rds")
